@@ -1,14 +1,10 @@
-const express=require("express");
-const dotenv=require("dotenv");
-const cors=require("cors");
-const connectDB=require("./config/db");
-const createAdmin=require("./config/createAdmin");
+const express = require("express");
+const dotenv = require("dotenv");
+const cors = require("cors");
 
 dotenv.config();
-connectDB();
-createAdmin();
 
-const app=express();
+const app = express();
 app.use(cors());
 app.use(express.json());
 
@@ -17,8 +13,7 @@ app.use("/api/course", require("./routes/courseRoutes"));
 app.use("/api/enrollments", require("./routes/enrollmentRoutes"));
 app.use("/api/performance", require("./routes/performanceRoutes"));
 
-
-const PORT=process.env.PORT || 5000;
-app.listen(PORT, ()=> {
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });

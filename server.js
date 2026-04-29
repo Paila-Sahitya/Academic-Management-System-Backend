@@ -1,10 +1,8 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
-const createAdmin = require("./config/createAdmin");
 
 dotenv.config();
-createAdmin();
 
 const app = express();
 app.use(cors());

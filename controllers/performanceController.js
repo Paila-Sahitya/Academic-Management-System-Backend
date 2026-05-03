@@ -1,6 +1,6 @@
 const pool = require("../db/index");
 
-// ─── GET PERFORMANCE ─────────────────────────────────────────
+// get performance
 exports.getPerformance = async (req, res) => {
     try {
         const result = await pool.query(

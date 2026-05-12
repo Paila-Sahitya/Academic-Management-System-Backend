@@ -52,7 +52,7 @@ exports.submitAppeal = async (req, res) => {
         res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -175,7 +175,7 @@ exports.resolveAppeal = async (req, res) => {
 
     } catch (error) {
         await client.query("ROLLBACK");
-        res.status(500).json({ message: error.message });
+        next(error)
     } finally {
         client.release();
     }
@@ -207,7 +207,7 @@ exports.getMyAppeals = async (req, res) => {
         res.json(result.rows);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -248,6 +248,6 @@ exports.getDeptAppeals = async (req, res) => {
         res.json(result.rows);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };

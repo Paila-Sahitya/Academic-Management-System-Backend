@@ -144,7 +144,7 @@ exports.enrollCourse = async (req, res) => {
                 message: "Already enrolled or on waitlist"
             });
         }
-        res.status(500).json({ message: error.message });
+        next(error);
     } finally {
         client.release();
     }
@@ -262,7 +262,7 @@ exports.dropCourse = async (req, res) => {
 
     } catch (error) {
         await client.query("ROLLBACK");
-        res.status(500).json({ message: error.message });
+        next(error);
     } finally {
         client.release();
     }
@@ -359,7 +359,7 @@ exports.markAttendance = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -441,7 +441,7 @@ exports.updateMarks = async (req, res) => {
         });
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -492,6 +492,6 @@ exports.getMyEnrollments = async (req, res) => {
         res.json(enrollments);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };

@@ -128,7 +128,7 @@ exports.createCourse = async (req, res) => {
                 message: "Course code already exists"
             });
         }
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -176,7 +176,7 @@ exports.getCourses = async (req, res) => {
         res.json(courses);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -240,7 +240,7 @@ exports.updateCourse = async (req, res) => {
         res.json(updated);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -276,6 +276,6 @@ exports.deleteCourse = async (req, res) => {
         res.json({ message: "Course deleted successfully" });
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };

@@ -34,7 +34,7 @@ exports.createDepartment = async (req, res) => {
         res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -87,7 +87,7 @@ exports.createDepartmentAdmin = async (req, res) => {
         res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -110,7 +110,7 @@ exports.getAllDepartments = async (req, res) => {
         res.json(result.rows);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
@@ -137,6 +137,6 @@ exports.getAllUsers = async (req, res) => {
         res.json(result.rows);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };

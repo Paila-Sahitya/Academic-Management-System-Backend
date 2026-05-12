@@ -33,9 +33,7 @@ exports.register = async (req, res) => {
         res.status(201).json(result.rows[0]);
 
     } catch (error) {
-        res.status(500).json({
-            message: error.message
-        });
+        next(error);
     }
 };
 
@@ -76,8 +74,6 @@ exports.login = async (req, res) => {
         res.json({ token });
 
     } catch (error) {
-        res.status(500).json({
-            message: error.message
-        });
+        next(error);
     }
 };

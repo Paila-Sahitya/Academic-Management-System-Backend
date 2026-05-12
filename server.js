@@ -2,13 +2,17 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const createAdmin = require("./config/createAdmin");
+const requestLogger = require("./middleware/requestLogger");
 
 dotenv.config();
 createAdmin();
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
+app.use(requestLogger);
+
 
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));

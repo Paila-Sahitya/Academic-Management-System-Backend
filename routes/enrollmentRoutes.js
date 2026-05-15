@@ -18,14 +18,15 @@ const {
     marksLimiter,
     attendanceLimiter
 } = require("../middleware/rateLimiter");
+const idempotency = require("../middleware/idempotency");
 
 
 const router = express.Router();
 
-router.post("/", protect, authorize("student"), enrollLimiter, validate(enrollSchema),enrollCourse);
+router.post("/", protect, authorize("student"), enrollLimiter, idempotency, validate(enrollSchema),enrollCourse);
 router.delete("/:id/drop", protect, authorize("student"), dropCourse);
 router.post("/attendance/:id", protect, authorize("faculty"), attendanceLimiter, validate(attendanceSchema), markAttendance);
-router.put("/marks/:id", protect, authorize("faculty"), marksLimiter, validate(marksSchema), updateMarks);
+router.put("/marks/:id", protect, authorize("faculty"), marksLimiter, idempotency, validate(marksSchema), updateMarks);
 router.get("/my", protect, authorize("student"), getMyEnrollments);
 
 module.exports = router;

@@ -1,21 +1,15 @@
 const logger = require("../config/logger");
+const redis  = require("../config/redis");
 
-let redis;
-try {
-    redis = require("../config/redis");
-} catch {
-    redis = null;
-}
-
-const IDEMPOTENCY_TTL = 86400; // 24 hours in seconds
+const IDEMPOTENCY_TTL = 86400; // 24 hours
 
 const idempotency = async (req, res, next) => {
     const key = req.headers["x-idempotency-key"];
 
-    // no key provided - skip idempotency (not mandatory)
+    // no key - skip
     if (!key) return next();
 
-    // validate key is a proper UUID
+    // validate UUID format
     const uuidRegex =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -25,23 +19,17 @@ const idempotency = async (req, res, next) => {
         });
     }
 
-    // if Redis not available - skip (graceful degradation)
-    if (!redis) {
-        logger.warn("Idempotency middleware skipped — Redis unavailable");
-        return next();
-    }
-
     const redisKey = `idempotency:${key}`;
 
     try {
-        // check if this key was already processed
+        // check Redis for existing response
         const cached = await redis.get(redisKey);
 
         if (cached) {
             const { status, body } = JSON.parse(cached);
 
             logger.info({
-                message:        "Idempotent request — returning cached response",
+                message:        "Idempotent request - returning cached response",
                 idempotencyKey: key,
                 path:           req.path,
                 cachedStatus:   status,
@@ -50,12 +38,11 @@ const idempotency = async (req, res, next) => {
             return res.status(status).json(body);
         }
 
-        // intercept res.json to capture and store the response
+        // intercept res.json to capture and store response
         const originalJson = res.json.bind(res);
 
         res.json = async (body) => {
             try {
-                // store response with 24hr TTL
                 await redis.setex(
                     redisKey,
                     IDEMPOTENCY_TTL,
@@ -69,21 +56,27 @@ const idempotency = async (req, res, next) => {
                     message:        "Idempotency key stored",
                     idempotencyKey: key,
                     status:         res.statusCode,
+                    path:           req.path,
                 });
             } catch (err) {
-                // if storing fails - log but don't crash
-                logger.warn(`Failed to store idempotency key: ${err.message}`);
+                logger.warn({
+                    message: "Failed to store idempotency key",
+                    error:   err.message,
+                    key,
+                });
             }
 
-            // call original res.json to send the response
             return originalJson(body);
         };
 
         next();
 
     } catch (err) {
-        // Redis error - skip idempotency, don't fail request
-        logger.warn(`Idempotency middleware error: ${err.message}`);
+        // Redis down - skip idempotency, don't fail request
+        logger.warn({
+            message: "Idempotency middleware skipped - Redis error",
+            error:   err.message,
+        });
         next();
     }
 };

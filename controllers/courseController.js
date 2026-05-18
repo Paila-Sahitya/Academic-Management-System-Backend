@@ -1,6 +1,8 @@
-const pool = require("../db/index");
+const pool   = require("../db/index");
+const cache  = require("../helpers/cache");
+const logger = require("../config/logger");
 
-// helper - derive course status from dates
+// HELPER — derive course status from dates
 function getCourseStatus(startDate, endDate) {
     if (!startDate || !endDate) return "upcoming";
     const today = new Date();
@@ -12,8 +14,8 @@ function getCourseStatus(startDate, endDate) {
 }
 
 
-// create course
-exports.createCourse = async (req, res) => {
+//  CREATE COURSE
+exports.createCourse = async (req, res, next) => {
     try {
         const {
             courseName,
@@ -25,13 +27,6 @@ exports.createCourse = async (req, res) => {
             endDate,
             totalClasses
         } = req.body;
-
-        // basic validation
-        if (!courseName || !courseCode || !instructor) {
-            return res.status(400).json({
-                message: "courseName, courseCode and instructor are required"
-            });
-        }
 
         // dept admin can only create in their own department
         if (req.user.role === "department_admin") {
@@ -45,29 +40,6 @@ exports.createCourse = async (req, res) => {
                     message: "Cannot create course outside your department"
                 });
             }
-        }
-
-        // validate dates if provided
-        if (startDate && endDate) {
-            if (new Date(startDate) >= new Date(endDate)) {
-                return res.status(400).json({
-                    message: "Start date must be before end date"
-                });
-            }
-        }
-
-        // validate maxStudents
-        if (maxStudents !== undefined && maxStudents <= 0) {
-            return res.status(400).json({
-                message: "maxStudents must be greater than 0"
-            });
-        }
-
-        // validate totalClasses
-        if (totalClasses !== undefined && totalClasses <= 0) {
-            return res.status(400).json({
-                message: "totalClasses must be greater than 0"
-            });
         }
 
         // verify department exists if provided
@@ -120,6 +92,9 @@ exports.createCourse = async (req, res) => {
         const course = result.rows[0];
         course.status = getCourseStatus(course.start_date, course.end_date);
 
+        //  invalidate course cache
+        await cache.delPattern("courses:*");
+
         res.status(201).json(course);
 
     } catch (error) {
@@ -133,11 +108,23 @@ exports.createCourse = async (req, res) => {
 };
 
 
-// get courses
-exports.getCourses = async (req, res) => {
+// GET ALL COURSES
+exports.getCourses = async (req, res, next) => {
     try {
         const { department } = req.query;
 
+        // build cache key based on filter
+        const cacheKey = department
+            ? `courses:dept:${department.toUpperCase()}`
+            : "courses:all";
+
+        //  check cache first 
+        const cached = await cache.get(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
+
+        //  cache miss — query DB
         let query = `
             SELECT
                 c.id,
@@ -173,6 +160,9 @@ exports.getCourses = async (req, res) => {
             status: getCourseStatus(c.start_date, c.end_date)
         }));
 
+        //  store in cache (10 min TTL) 
+        await cache.set(cacheKey, courses, 600);
+
         res.json(courses);
 
     } catch (error) {
@@ -181,16 +171,20 @@ exports.getCourses = async (req, res) => {
 };
 
 
-// update course
-exports.updateCourse = async (req, res) => {
+//  UPDATE COURSE 
+exports.updateCourse = async (req, res, next) => {
     try {
-        const { id } = req.params;
-        const { maxStudents, startDate, endDate, totalClasses } = req.body;
+        const { id }  = req.params;
+        const {
+            maxStudents,
+            startDate,
+            endDate,
+            totalClasses
+        } = req.body;
 
         // fetch course first
         const existing = await pool.query(
-            "SELECT * FROM courses WHERE id = $1",
-            [id]
+            "SELECT * FROM courses WHERE id = $1", [id]
         );
 
         if (existing.rows.length === 0) {
@@ -201,23 +195,11 @@ exports.updateCourse = async (req, res) => {
 
         const course = existing.rows[0];
 
-        // dept admin can only update their own dept's courses
+        // dept admin can only update own dept
         if (req.user.role === "department_admin") {
             if (course.department !== req.user.department) {
                 return res.status(403).json({
                     message: "Not your department"
-                });
-            }
-        }
-
-        // validate dates if both provided
-        const newStart = startDate || course.start_date;
-        const newEnd   = endDate   || course.end_date;
-
-        if (newStart && newEnd) {
-            if (new Date(newStart) >= new Date(newEnd)) {
-                return res.status(400).json({
-                    message: "Start date must be before end date"
                 });
             }
         }
@@ -237,6 +219,9 @@ exports.updateCourse = async (req, res) => {
         const updated = result.rows[0];
         updated.status = getCourseStatus(updated.start_date, updated.end_date);
 
+        //  invalidate course cache 
+        await cache.delPattern("courses:*");
+
         res.json(updated);
 
     } catch (error) {
@@ -245,15 +230,14 @@ exports.updateCourse = async (req, res) => {
 };
 
 
-// delete course
-exports.deleteCourse = async (req, res) => {
+//  DELETE COURSE 
+exports.deleteCourse = async (req, res, next) => {
     try {
         const { id } = req.params;
 
         // fetch course first
         const existing = await pool.query(
-            "SELECT * FROM courses WHERE id = $1",
-            [id]
+            "SELECT * FROM courses WHERE id = $1", [id]
         );
 
         if (existing.rows.length === 0) {
@@ -262,7 +246,7 @@ exports.deleteCourse = async (req, res) => {
             });
         }
 
-        // dept admin can only delete their own dept's courses
+        // dept admin can only delete own dept
         if (req.user.role === "department_admin") {
             if (existing.rows[0].department !== req.user.department) {
                 return res.status(403).json({
@@ -272,6 +256,9 @@ exports.deleteCourse = async (req, res) => {
         }
 
         await pool.query("DELETE FROM courses WHERE id = $1", [id]);
+
+        //  invalidate course cache 
+        await cache.delPattern("courses:*");
 
         res.json({ message: "Course deleted successfully" });
 

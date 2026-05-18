@@ -1,109 +1,124 @@
-# 🎓 Academic Management System — v4.0
+# 🎓 Academic Management System — Backend API
+**v5.0** | Node.js · Express · PostgreSQL · Redis · Docker · JWT
 
-A role-based academic backend API built with Node.js, Express, and PostgreSQL.
-Covers department management, course capacity with waitlists, attendance tracking, marks entry, an appeals system, request logging, health checks, rate limiting, input validation, and safe retries.
+A production-grade academic backend API with role-based access control, full enrollment lifecycle management, Redis caching, structured logging, rate limiting, input validation, and idempotency.
 
 ---
 
-## 📌 Versions
+## 📌 Version History
 
-| Version | Branch | Database | Status |
+| Version | Tag | What Was Built | Status |
 |---|---|---|---|
-| v1.0 | `v1` | MongoDB + Mongoose | Stable, archived |
-| v2.0 | `v2` | PostgreSQL + pg | Stable, archived |
-| v3.0 | `v3` | PostgreSQL + pg | Stable, archived |
-| v4.0 | `main` | PostgreSQL + pg | Current |
+| v1.0 | `v1.0` | MongoDB + Mongoose baseline | Archived |
+| v2.0 | `v2.0` | PostgreSQL migration | Stable |
+| v3.0 | `v3.0` | Roles, waitlist, attendance, appeals | Stable |
+| v4.0 | `v4.0` | Observability + API hardening | Stable |
+| **v5.0** | `v5.0` | **Redis caching + idempotency** | **Current** |
 
 ---
 
 ## 🚀 Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Runtime | Node.js |
-| Framework | Express.js |
-| Database | PostgreSQL 15 |
-| DB Client | node-postgres (pg) |
-| Auth | JWT (jsonwebtoken) |
-| Password Hashing | bcryptjs |
-| Logging | Winston + Morgan |
-| Input Validation | Zod |
-| Rate Limiting | express-rate-limit |
-| Idempotency Cache | Redis |
-| Containerisation | Docker + Docker Compose |
-| Testing | Postman |
+| Layer | Technology | Purpose |
+|---|---|---|
+| Runtime | Node.js 18 | Server runtime |
+| Framework | Express.js 5 | HTTP server + routing |
+| Database | PostgreSQL 15 | Primary data store |
+| Cache | Redis 7 | Response caching + idempotency |
+| Auth | JWT | Stateless authentication |
+| Password | bcryptjs | Password hashing |
+| Validation | Zod | Input validation + transformation |
+| Logging | Winston + Morgan | Structured JSON logging |
+| Rate Limiting | express-rate-limit | Abuse prevention |
+| Containerisation | Docker + Compose | Local dev environment |
 
 ---
 
-## 👥 Roles & Permissions
+## 👥 Role System
 
-| Feature | Admin | Dept Admin | Faculty | Student |
-|---|---|---|---|---|
-| Register / Login | ✅ | ✅ | ✅ | ✅ |
-| Create Department | ✅ | ❌ | ❌ | ❌ |
-| Create Dept Admin | ✅ | ❌ | ❌ | ❌ |
-| View All Users | ✅ | ❌ | ❌ | ❌ |
-| Create Course | ✅ | ✅ own dept | ❌ | ❌ |
-| Edit Course | ✅ | ✅ own dept | ❌ | ❌ |
-| Delete Course | ✅ | ✅ own dept | ❌ | ❌ |
-| View Courses | ✅ | ✅ | ✅ | ✅ |
-| Enroll in Course | ❌ | ❌ | ❌ | ✅ |
-| Drop Course | ❌ | ❌ | ❌ | ✅ |
-| Mark Attendance | ❌ | ❌ | ✅ own course | ❌ |
-| Enter Marks | ❌ | ❌ | ✅ own course | ❌ |
-| Submit Appeal | ❌ | ❌ | ❌ | ✅ |
-| Resolve Appeal | ✅ | ✅ own dept | ❌ | ❌ |
-| View My Enrollments | ❌ | ❌ | ❌ | ✅ |
-| View Performance | ❌ | ❌ | ❌ | ✅ |
+| Role | Created By | Can Do |
+|---|---|---|
+| `admin` | Auto-seeded | Everything — departments, dept admins, system-wide |
+| `department_admin` | Main admin | Courses + appeals in their department only |
+| `faculty` | Self-register | Attendance + marks for their assigned courses only |
+| `student` | Self-register | Own enrollments, own performance |
 
 ---
 
-## 📁 Project Structure
+## 🗄️ Database Schema — 5 Tables
 
 ```
-server/
-├── config/
-│   ├── createAdmin.js            → seeds default admin on startup
-│   └── logger.js                 → Winston structured logging setup
-├── controllers/
-│   ├── adminController.js        → departments, dept admin creation, user listing
-│   ├── appealController.js       → submit, resolve, view appeals
-│   ├── authController.js         → register, login
-│   ├── courseController.js       → create, list, update, delete courses
-│   ├── enrollmentController.js   → enroll, drop, attendance, marks
-│   └── performanceController.js  → performance summary
-├── db/
-│   ├── index.js                  → pg connection pool
-│   └── init.sql                  → full PostgreSQL schema
-├── middleware/
-│   ├── authMiddleware.js         → JWT protect + role authorize
-│   ├── errorHandler.js           → global error handler
-│   ├── idempotency.js            → idempotency key middleware (Redis)
-│   ├── rateLimiter.js            → per-endpoint rate limit configs
-│   ├── requestLogger.js          → Morgan + Winston request logging
-│   └── validate.js               → Zod validation wrapper
-├── routes/
-│   ├── adminRoutes.js
-│   ├── appealRoutes.js
-│   ├── authRoutes.js
-│   ├── courseRoutes.js
-│   ├── enrollmentRoutes.js
-│   ├── healthRoutes.js           → /health + /health/ready
-│   └── performanceRoutes.js
-├── schemas/
-│   ├── adminSchemas.js
-│   ├── appealSchemas.js
-│   ├── authSchemas.js
-│   ├── courseSchemas.js
-│   └── enrollmentSchemas.js
-├── logs/
-│   ├── combined.log              → all logs (info + warn + error)
-│   └── error.log                 → errors only
-├── .env                          → environment variables (not committed)
-├── .gitignore
-├── docker-compose.yml            → runs PostgreSQL + Redis locally
-├── package.json
-└── server.js                     → entry point
+users          → all roles (admin, department_admin, faculty, student)
+departments    → department lookup (code, name, created_by)
+courses        → catalog with capacity, dates, status
+enrollments    → student-course relationship + attendance + marks + lifecycle
+appeals        → exception handling with full audit trail
+```
+
+### Enrollment Lifecycle — 6 States
+
+```
+(none) ──enrollCourse()──► enrolled ──dropCourse()──► dropped
+(none) ──course full──────► waitlisted ──promoted──►  enrolled
+enrolled ──course ends──► attendance checked
+    < 50% ──► disqualified ──appeal──► enrolled (override)
+    ≥ 50% ──► marks entered
+        < 30%  ──► failed    (retake allowed)
+        ≥ 30%  ──► completed (cannot re-enroll)
+```
+
+---
+
+## 🔌 API Reference — 19 Endpoints
+
+### Auth
+```
+POST /api/auth/register    No auth    Register user
+POST /api/auth/login       No auth    Login → JWT
+```
+
+### Admin
+```
+POST /api/admin/department     admin         Create department
+POST /api/admin/dept-admin     admin         Create dept admin
+GET  /api/admin/departments    any           List departments  ⚡ cached 1hr
+GET  /api/admin/users          admin         List all users
+```
+
+### Courses
+```
+POST   /api/course/        admin|dept_admin  Create course
+GET    /api/course/        any              List courses  ⚡ cached 10min
+PUT    /api/course/:id     admin|dept_admin  Update course
+DELETE /api/course/:id     admin|dept_admin  Delete course
+```
+
+### Enrollments
+```
+POST   /api/enrollments/                student   Enroll (waitlist if full)  🔑 idempotent
+DELETE /api/enrollments/:id/drop        student   Drop course
+POST   /api/enrollments/attendance/:id  faculty   Mark attendance (present/absent)
+PUT    /api/enrollments/marks/:id       faculty   Enter marks  🔑 idempotent
+GET    /api/enrollments/my              student   My enrollments
+```
+
+### Appeals
+```
+POST /api/appeals/              student           Submit appeal
+PUT  /api/appeals/:id/resolve   admin|dept_admin  Resolve (approve/reject)
+GET  /api/appeals/my            student           My appeals
+GET  /api/appeals/dept          dept_admin        Dept appeals
+```
+
+### Performance
+```
+GET /api/performance/    student    Summary + per-course breakdown  ⚡ cached 5min
+```
+
+### Health (no auth)
+```
+GET /health        Liveness  — is process alive?
+GET /health/ready  Readiness — DB + Redis connected?
 ```
 
 ---
@@ -115,27 +130,22 @@ server/
 
 ---
 
-## 🛠️ Local Setup
+## 🛠️ Setup — One Command After Clone
 
-### 1 — Clone the repository
-
-```bash
-git clone https://github.com/your-username/academic-management-system.git
-cd academic-management-system/server
-git checkout main
-```
-
-### 2 — Install dependencies
+### 1 — Clone + install
 
 ```bash
+git clone https://github.com/Paila-Sahitya/Academic-Management-System-Backend.git
+cd Academic-Management-System-Backend
 npm install
 ```
 
-### 3 — Create `.env` file
+### 2 — Create `.env`
 
 ```env
 PORT=5000
 JWT_SECRET=your_jwt_secret_here
+LOG_LEVEL=info
 
 DB_HOST=127.0.0.1
 DB_PORT=5433
@@ -147,436 +157,236 @@ REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 ```
 
-> **Note:** Port `5433` is used to avoid conflicts with any existing local PostgreSQL installation.
-
-### 4 — Start PostgreSQL and Redis with Docker
+### 3 — Start services
 
 ```bash
 docker-compose up -d
 ```
 
-This starts a PostgreSQL 15 container and a Redis container. PostgreSQL automatically runs `db/init.sql` to create all tables and indexes on first startup.
+Starts PostgreSQL 15 (port 5433) + Redis 7 (port 6379).
+Schema applied automatically via `db/init.sql` on first run.
 
-Verify containers are running:
-```bash
-docker ps
-```
-
-Verify tables were created:
-```bash
-docker exec -it ams_postgres psql -U ams_user -d ams_db -c "\dt"
-```
-
-Expected output:
-```
- public | appeals     | table | ams_user
- public | courses     | table | ams_user
- public | departments | table | ams_user
- public | enrollments | table | ams_user
- public | users       | table | ams_user
-```
-
-### 5 — Start the server
+### 4 — Start server
 
 ```bash
 npm run dev
 ```
 
-Expected output:
+Expected:
 ```
 Admin user created
+Redis connected
+Redis ready to accept commands
 Server running on port 5000
 ```
 
-> On subsequent starts: `Admin already exists` — this is expected.
+### 5 — Verify
 
----
-
-## 🗄️ Database Schema
-
-### users
-| Column | Type | Constraints |
-|---|---|---|
-| id | SERIAL | PRIMARY KEY |
-| name | VARCHAR(100) | NOT NULL |
-| email | VARCHAR(150) | NOT NULL, UNIQUE |
-| password | VARCHAR(255) | NOT NULL |
-| role | VARCHAR(20) | NOT NULL, DEFAULT 'student', CHECK IN ('admin','department_admin','faculty','student') |
-| department | VARCHAR(20) | DEFAULT NULL |
-| created_at | TIMESTAMP | DEFAULT NOW() |
-
-### departments
-| Column | Type | Constraints |
-|---|---|---|
-| id | SERIAL | PRIMARY KEY |
-| name | VARCHAR(100) | NOT NULL, UNIQUE |
-| code | VARCHAR(20) | NOT NULL, UNIQUE |
-| created_by | INTEGER | REFERENCES users(id) ON DELETE SET NULL |
-| created_at | TIMESTAMP | DEFAULT NOW() |
-
-### courses
-| Column | Type | Constraints |
-|---|---|---|
-| id | SERIAL | PRIMARY KEY |
-| course_name | VARCHAR(150) | NOT NULL |
-| course_code | VARCHAR(20) | NOT NULL, UNIQUE |
-| instructor | INTEGER | NOT NULL, REFERENCES users(id) ON DELETE RESTRICT |
-| department | VARCHAR(20) | — |
-| max_students | INTEGER | NOT NULL, DEFAULT 60 |
-| current_count | INTEGER | NOT NULL, DEFAULT 0 |
-| start_date | DATE | — |
-| end_date | DATE | — |
-| total_classes | INTEGER | — |
-| created_at | TIMESTAMP | DEFAULT NOW() |
-
-### enrollments
-| Column | Type | Constraints |
-|---|---|---|
-| id | SERIAL | PRIMARY KEY |
-| student_id | INTEGER | NOT NULL, REFERENCES users(id) ON DELETE CASCADE |
-| course_id | INTEGER | NOT NULL, REFERENCES courses(id) ON DELETE CASCADE |
-| status | VARCHAR(20) | NOT NULL, DEFAULT 'enrolled', CHECK IN ('enrolled','waitlisted','dropped','disqualified','failed','completed') |
-| waitlist_position | INTEGER | DEFAULT NULL |
-| marks | INTEGER | DEFAULT NULL |
-| attended_classes | INTEGER | NOT NULL, DEFAULT 0 |
-| is_eligible | BOOLEAN | NOT NULL, DEFAULT true |
-| is_retake_eligible | BOOLEAN | NOT NULL, DEFAULT false |
-| created_at | TIMESTAMP | DEFAULT NOW() |
-| — | — | UNIQUE (student_id, course_id) |
-
-### appeals
-| Column | Type | Constraints |
-|---|---|---|
-| id | SERIAL | PRIMARY KEY |
-| student_id | INTEGER | NOT NULL, REFERENCES users(id) ON DELETE CASCADE |
-| enrollment_id | INTEGER | NOT NULL, REFERENCES enrollments(id) ON DELETE CASCADE |
-| course_id | INTEGER | NOT NULL, REFERENCES courses(id) ON DELETE CASCADE |
-| reason | TEXT | NOT NULL |
-| status | VARCHAR(20) | NOT NULL, DEFAULT 'pending', CHECK IN ('pending','approved','rejected') |
-| admin_note | TEXT | — |
-| resolved_by | INTEGER | REFERENCES users(id) ON DELETE SET NULL |
-| override_eligibility | BOOLEAN | DEFAULT false |
-| override_marks | INTEGER | DEFAULT NULL |
-| created_at | TIMESTAMP | DEFAULT NOW() |
-| updated_at | TIMESTAMP | DEFAULT NOW() |
-
----
-
-## 🔌 API Reference
-
-### Auth — `/api/auth`
-
-| Method | Endpoint | Auth | Body | Description |
-|---|---|---|---|---|
-| POST | `/api/auth/register` | No | `{ name, email, password, role }` | Register user |
-| POST | `/api/auth/login` | No | `{ email, password }` | Login, receive JWT |
-
-### Admin — `/api/admin`
-
-| Method | Endpoint | Auth | Role | Body | Description |
-|---|---|---|---|---|---|
-| POST | `/api/admin/department` | Yes | Admin | `{ name, code }` | Create department |
-| POST | `/api/admin/dept-admin` | Yes | Admin | `{ name, email, password, department }` | Create dept admin |
-| GET | `/api/admin/departments` | Yes | Any | — | List all departments |
-| GET | `/api/admin/users` | Yes | Admin | — | List all users |
-
-### Courses — `/api/course`
-
-| Method | Endpoint | Auth | Role | Body | Description |
-|---|---|---|---|---|---|
-| POST | `/api/course/` | Yes | Admin, Dept Admin | `{ courseName, courseCode, instructor, department, maxStudents, startDate, endDate, totalClasses }` | Create course |
-| GET | `/api/course/` | Yes | Any | — | List all courses (with derived status) |
-| PUT | `/api/course/:id` | Yes | Admin, Dept Admin | `{ maxStudents, startDate, endDate, totalClasses }` | Update course |
-| DELETE | `/api/course/:id` | Yes | Admin, Dept Admin | — | Delete course |
-
-### Enrollments — `/api/enrollments`
-
-| Method | Endpoint | Auth | Role | Headers | Body | Description |
-|---|---|---|---|---|---|---|
-| POST | `/api/enrollments/` | Yes | Student | `X-Idempotency-Key: <uuid>` | `{ courseId }` | Enroll in course (or join waitlist) |
-| DELETE | `/api/enrollments/:id/drop` | Yes | Student | — | — | Drop course (triggers waitlist promotion) |
-| POST | `/api/enrollments/attendance/:id` | Yes | Faculty | — | `{ present: true/false }` | Mark attendance |
-| PUT | `/api/enrollments/marks/:id` | Yes | Faculty | `X-Idempotency-Key: <uuid>` | `{ marks }` | Enter marks (post-course, eligible students only) |
-| GET | `/api/enrollments/my` | Yes | Student | — | — | My enrollments with attendance % |
-
-### Appeals — `/api/appeals`
-
-| Method | Endpoint | Auth | Role | Body | Description |
-|---|---|---|---|---|---|
-| POST | `/api/appeals/` | Yes | Student | `{ enrollmentId, reason }` | Submit appeal |
-| PUT | `/api/appeals/:id/resolve` | Yes | Admin, Dept Admin | `{ status, adminNote, overrideEligibility?, overrideMarks? }` | Resolve appeal |
-| GET | `/api/appeals/my` | Yes | Student | — | My appeals |
-| GET | `/api/appeals/dept` | Yes | Dept Admin | — | Department's appeals |
-
-### Performance — `/api/performance`
-
-| Method | Endpoint | Auth | Role | Description |
-|---|---|---|---|---|
-| GET | `/api/performance/` | Yes | Student | Performance summary with per-course breakdown |
-
-### Health — `/`
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| GET | `/health` | No | Liveness check — is the process alive? |
-| GET | `/health/ready` | No | Readiness check — are DB and Redis reachable? |
-
----
-
-## 🔄 Enrollment Lifecycle
-
-```
-                    ┌─────────────────────────────┐
-                    │         ENROLL               │
-                    └──────────┬──────────────────┘
-                               │
-              ┌────────────────┴────────────────┐
-              │ Seats available?                 │
-        YES   │                             NO   │
-              ▼                                  ▼
-         [enrolled]                        [waitlisted]
-              │                                  │
-              │ Drop                     Promoted when seat opens
-              ▼                                  │
-         [dropped] ◄──────────────────────────────┘
-              │
-              │ Can re-enroll
-              ▼
-     Attend classes
-              │
-     Faculty marks attendance daily
-              │
-     < 50% attendance?
-        YES ──► [disqualified] ──► Can re-enroll or appeal
-        NO  ──► is_eligible = true
-              │
-     Course ends
-              │
-     Faculty enters marks
-              │
-     marks < 30?
-        YES ──► [failed] ──► is_retake_eligible = true ──► Can re-enroll
-        NO  ──► [completed] ──► Cannot re-enroll
+```bash
+curl http://localhost:5000/health/ready
 ```
 
----
-
-## 📊 Course Status (Derived from Dates)
-
-| Condition | Status |
-|---|---|
-| Today < `start_date` | `upcoming` |
-| `start_date` ≤ Today ≤ `end_date` | `ongoing` |
-| Today > `end_date` | `completed` |
-
----
-
-## 🎯 Business Logic Rules
-
-**Enrollment Guards**
-- Students with `completed` status cannot re-enroll in that course
-- Students with `failed` or `disqualified` status can re-enroll
-- Cannot enroll in a course that has already ended
-- Capacity check and enrollment happen in a single transaction
-
-**Waitlist Promotion**
-- When a student drops, the next waitlisted student is auto-enrolled
-- Remaining waitlist positions shift down by 1
-
-**Attendance**
-- Only the assigned instructor can mark attendance
-- Attendance can only be marked while the course is `ongoing`
-- Below 50% attendance → `is_eligible = false`
-
-**Marks Entry**
-- Can only be entered after the course end date
-- Blocked if `is_eligible = false`
-- `marks < 30` → status `failed`, `is_retake_eligible = true`
-- `marks >= 30` → status `completed`
-
-**Appeals**
-- One pending appeal per enrollment at a time
-- Dept admin can only resolve appeals for their department
-- `overrideEligibility: true` restores student eligibility
-- `overrideMarks` updates marks and recalculates final status
-
----
-
-## 📈 Performance Grades
-
-| Average Marks | Grade |
-|---|---|
-| ≥ 85 | Excellent |
-| ≥ 70 | Good |
-| ≥ 50 | Average |
-| < 50 | Needs Improvement |
-
-Only `completed` enrollments are counted in averages. Dropped, waitlisted, and ongoing courses are excluded.
-
----
-
-## 🔐 Authentication
-
-All protected routes require a JWT in the `Authorization` header:
-
-```
-Authorization: Bearer <token>
-```
-
-Tokens expire after 24 hours.
-
-**Default admin account (created on first startup):**
-```
-Email:    admin@system.com
-Password: admin123
-```
-
----
-
-## 🛡️ What v4.0 Added
-
-### Logging — Winston + Morgan
-
-Every request is logged as JSON:
-
+Expected:
 ```json
 {
-  "level": "info",
-  "method": "POST",
-  "path": "/api/enrollments",
-  "status": 201,
-  "duration": "43ms",
-  "userId": "5",
-  "timestamp": "2025-01-15 09:23:11"
+  "status": "ready",
+  "checks": {
+    "database": { "status": "ok", "responseTime": "4ms" },
+    "redis":    { "status": "ok", "responseTime": "1ms" }
+  }
 }
 ```
 
-- `logs/combined.log` — all requests
-- `logs/error.log` — errors only (5xx responses)
+**Default admin:** `admin@system.com` / `admin123`
 
-### Health Endpoints
+---
 
-| Endpoint | What it checks |
-|---|---|
-| `GET /health` | Is the server process running? |
-| `GET /health/ready` | Are the database and Redis reachable? |
+## ⚡ Caching — Redis Cache-Aside Pattern
 
-No authentication required on either endpoint.
+| Endpoint | Cache Key | TTL | Invalidated By |
+|---|---|---|---|
+| `GET /api/course` | `courses:all` | 10 min | create, update, delete course |
+| `GET /api/course?department=CSE` | `courses:dept:CSE` | 10 min | create, update, delete course |
+| `GET /api/performance` | `performance:student:{id}` | 5 min | marks, attendance, appeal resolve |
+| `GET /api/admin/departments` | `departments:all` | 1 hour | createDepartment |
 
-### Rate Limiting
+Graceful degradation — if Redis unavailable, requests fall through to PostgreSQL transparently. No 500 errors.
 
-Requests are limited per IP. Limits are disabled during tests (`NODE_ENV=test`).
+---
 
-| Applied To | Limit |
-|---|---|
-| All `/api/` routes | 100 / 15 min |
-| `POST /api/auth/login` | 10 / 15 min |
-| `POST /api/enrollments` | 20 / 15 min |
-| `PUT /api/enrollments/marks` | 30 / 15 min |
-| `POST /api/enrollments/attendance` | 60 / 15 min |
+## 🛡️ Security & Hardening
+
+### Rate Limits
+```
+All /api/ routes          100 req / 15 min
+POST /api/auth/login       10 req / 15 min  (brute force protection)
+POST /api/enrollments      20 req / 15 min
+PUT  /enrollments/marks    30 req / 15 min
+```
+
+### Idempotency (🔑)
+```
+Header: X-Idempotency-Key: <UUID v4>
+```
+Supported on enrollment and marks endpoints. Same key on retry → original response returned, no duplicate processing. Stored in Redis with 24-hour TTL.
 
 ### Input Validation — Zod
-
-All `POST` and `PUT` bodies are validated before reaching a controller. Invalid requests return `400` with all failing fields at once:
-
+All POST/PUT bodies validated before hitting controllers:
 ```json
-{
-  "message": "Validation failed",
-  "errors": [
-    { "field": "courseId", "message": "courseId is required" },
-    { "field": "marks",    "message": "marks cannot exceed 100" }
-  ]
-}
+{ "message": "Validation failed", "errors": [{ "field": "marks", "message": "Cannot exceed 100" }] }
 ```
 
-### Error Handling
-
-All errors are caught in one place (`errorHandler.js`). `5xx` responses always return `"Internal server error"` — the real error is written to `error.log` only. `4xx` responses return the actual message.
-
-### Safe Retries
-
-`POST /api/enrollments` and `PUT /api/enrollments/marks` accept an `X-Idempotency-Key` header. If a request is retried with the same key, the original response is returned from Redis instead of processing again — preventing duplicate enrollments on network failure.
-
-```
-X-Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
-```
-
-Keys expire after 24 hours. If Redis is unavailable, the header is ignored and the request proceeds normally.
+### Other
+- bcrypt password hashing (10 salt rounds)
+- Parameterized SQL — no SQL injection
+- Two-layer RBAC (role + resource ownership)
+- Global error handler — stack traces never reach client
+- UNIQUE constraint at DB level — duplicate enrollments impossible
 
 ---
 
-## 🔒 Security
+## 📊 Observability
 
-- Passwords hashed with bcrypt (10 salt rounds)
-- JWT tokens expire after 24 hours
-- Parameterized queries throughout (no SQL injection)
-- Role and department-scoped access on every endpoint
-- `.env` excluded from version control
-- UNIQUE constraints at DB level prevent duplicate enrollments
-- Transactions used for enrollment and drop operations
-- Rate limiting on auth and sensitive endpoints
-- All input validated before hitting the database
-- Stack traces never sent to clients
+**Every request logged:**
+```json
+{ "level": "info", "method": "POST", "path": "/api/enrollments",
+  "status": 201, "duration": "43ms", "userId": "5",
+  "timestamp": "2025-01-15 09:23:11" }
+```
+
+**Log files:**
+```
+logs/combined.log  → all logs
+logs/error.log     → errors only (with stack traces)
+```
 
 ---
 
 ## 🐳 Docker Commands
 
 ```bash
-docker-compose up -d          # start PostgreSQL + Redis containers
-docker-compose down           # stop containers
-docker-compose down -v        # stop + delete all data (fresh start)
-docker ps                     # check container status
-docker logs ams_postgres      # view PostgreSQL logs
+docker-compose up -d           # start PostgreSQL + Redis
+docker-compose down            # stop
+docker-compose down -v         # stop + wipe data (fresh start)
+docker ps                      # check status
 
-# Connect to database directly
-docker exec -it ams_postgres psql -U ams_user -d ams_db
+# PostgreSQL
+docker exec -it ams_postgres psql -U ams_user -d ams_db -c "\dt"
 
-# Useful psql commands
-\dt          # list tables
-\d users     # describe users table
-\q           # quit
+# Redis — inspect cache
+docker exec -it ams_redis redis-cli
+  KEYS *          # all cached keys
+  TTL courses:all # time remaining
+  FLUSHALL        # clear cache (testing)
 ```
 
 ---
 
-## 📄 Changelog
+## 🧪 Tests
 
-### v4.0 — Logging, Validation & Reliability
-- Request logging with Winston + Morgan (JSON format, written to file)
-- Health endpoints: `GET /health` and `GET /health/ready`
-- Global error handler with consistent response format
-- Per-endpoint rate limiting
-- Zod validation on all POST/PUT request bodies
-- Safe retry support on enrollment and marks endpoints via idempotency keys (Redis)
-- Redis added to Docker Compose
+```bash
+# v3 features — 58 tests
+NODE_ENV=test node tests/run-tests-v3.js
 
-### v3.0 — Business Logic & Roles
-- `department_admin` role with department-scoped permissions
-- `departments` table and admin management endpoints
-- `appeals` table and full appeals workflow
-- Courses: capacity, waitlist, dates, total classes
-- Enrollment lifecycle: waitlist, drop, promotion, re-enrollment rules
-- Attendance tracking with eligibility calculation (< 50% → disqualified)
-- Marks entry requires course completion + 50% attendance
-- Failed students (< 30 marks) marked retake-eligible
-- Performance endpoint updated: per-course breakdown with attendance %
-- 19 endpoints, 58-test Postman suite
+# v4 hardening — 48 tests
+NODE_ENV=test node tests/run-tests-phase4.js
 
-### v2.0 — PostgreSQL Migration
-- Switched from MongoDB to PostgreSQL
-- Replaced Mongoose with node-postgres (pg)
-- Added Docker + Docker Compose
-- Normalized schema with foreign keys and indexes
-- Fixed typo in performance grading logic (`performace` → `performance`)
+# v5 Redis — caching tests
+NODE_ENV=test node tests/run-tests-phase5.js
+```
 
-### v1.0 — Initial Release
-- MongoDB + Mongoose implementation
-- JWT authentication with role-based access control
-- Course, enrollment, and performance management
+> `NODE_ENV=test` disables rate limiting during test runs.
+
+---
+
+## 🗂️ Project Structure
+
+```
+server/
+├── config/
+│   ├── createAdmin.js       → seeds default admin on startup
+│   ├── logger.js            → Winston structured logger
+│   └── redis.js             → ioredis connection + retry + events
+├── controllers/             → business logic + SQL queries
+├── db/
+│   ├── index.js             → pg connection pool
+│   └── init.sql             → 5-table schema + indexes
+├── helpers/
+│   └── cache.js             → get/set/del/delPattern + graceful degradation
+├── logs/
+│   ├── combined.log
+│   └── error.log
+├── middleware/
+│   ├── authMiddleware.js    → JWT verify + role check
+│   ├── errorHandler.js      → global error handler
+│   ├── idempotency.js       → UUID key + Redis storage
+│   ├── rateLimiter.js       → per-endpoint limits
+│   ├── requestLogger.js     → Morgan + Winston
+│   └── validate.js          → Zod wrapper
+├── routes/                  → URL → middleware → controller
+├── schemas/                 → Zod schemas (auth, course, enrollment, appeal, admin)
+├── tests/                   → automated test scripts
+├── .env
+├── docker-compose.yml       → PostgreSQL + Redis
+├── package.json
+└── server.js                → entry point
+```
+
+---
+
+## 🔑 Key Technical Decisions
+
+**1. PostgreSQL over MongoDB**
+Full ACID transactions required for waitlist promotion (5 sequential SQL operations). Foreign keys enforce referential integrity at DB level. Compound UNIQUE constraint on enrollments prevents race conditions impossible to solve cleanly in MongoDB.
+
+**2. Cache-Aside over Write-Through**
+Write-through caches data that may never be read and slows down writes. Cache-aside is lazy — only caches what's actually requested. Combined with explicit invalidation on every write, freshness is guaranteed without unnecessary cache population.
+
+**3. Per-Student Performance Cache Keys**
+`performance:student:{id}` means each student only sees their own data and invalidation is surgical — only the affected student's cache is deleted on marks change. Shared key would be a security risk and cause unnecessary invalidation.
+
+**4. TTL as Safety Net**
+TTLs are set long (10 min courses, 1 hour departments) because explicit invalidation handles freshness. TTL is fallback only — prevents permanently stale data if invalidation has a bug.
+
+**5. Graceful Degradation**
+Every cache operation has try/catch returning null on failure. Redis down = cache misses, not 500 errors. Cache is optimisation, not dependency.
+
+**6. Idempotency Keys on Enrollment + Marks**
+Network failures cause client retries. UUID-keyed responses in Redis with 24-hour TTL allow safe retries — same pattern as Stripe payment idempotency.
+
+**7. Two-Layer RBAC**
+Role-level (middleware) determines action types allowed. Resource-level (controllers) determines ownership — faculty marks attendance only for their courses, students drop only their own enrollments.
+
+---
+
+## 📈 Upcoming
+
+| Version | Focus |
+|---|---|
+| v6.0 | BullMQ async jobs — emails, PDF reports, cron |
+| v7.0 | Multi-stage Dockerfile + GitHub Actions CI/CD |
 
 ---
 
 ## 👩‍💻 Developed By
 
-**Sahitya**
+**Sahitya** — Backend Developer Intern
+
+---
+
+## 📄 Changelog
+
+### v5.0 — Redis Caching
+Added Redis 7 to Docker Compose. Cache-aside pattern on courses, performance, departments. Explicit cache invalidation on every write. Graceful degradation. Idempotency fully wired. /health/ready checks Redis. ioredis with exponential backoff retry.
+
+### v4.0 — Observability + API Hardening
+Winston structured JSON logging + Morgan request middleware. Global error handler. Liveness/readiness health endpoints. Rate limiting (global + per-endpoint). Zod validation on all POST/PUT. Idempotency middleware.
+
+### v3.0 — Roles + Features
+Department Admin role. Department model. Course capacity + automatic waitlist promotion. Course duration + status. Daily attendance tracking. Attendance-gated marks entry. Student appeals with admin override. 6-state enrollment state machine. Re-enrollment rules.
+
+### v2.0 — PostgreSQL Migration
+Full migration from MongoDB. 5-table normalized schema. Foreign keys (RESTRICT, CASCADE, SET NULL). Compound UNIQUE on enrollments. ACID transactions. Docker Compose. Typo bug fix in performance grading.
+
+### v1.0 — MongoDB Baseline
+MongoDB + Mongoose. JWT auth + RBAC. Basic course, enrollment, performance. 3 roles, 9 endpoints.

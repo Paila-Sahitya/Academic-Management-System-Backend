@@ -1,6 +1,7 @@
-const pool = require("../db/index");
+const pool   = require("../db/index");
+const cache  = require("../helpers/cache");
 
-// helper - derive course status from dates
+// helper - derive course status from dates 
 function getCourseStatus(startDate, endDate) {
     if (!startDate || !endDate) return "upcoming";
     const today = new Date();
@@ -12,10 +13,19 @@ function getCourseStatus(startDate, endDate) {
 }
 
 
-// Get Performance
-exports.getPerformance = async (req, res) => {
+// GET PERFORMANCE
+exports.getPerformance = async (req, res, next) => {
     try {
-        // fetch all enrollments for student with course info
+        // cache key is per student 
+        const cacheKey = `performance:student:${req.user.id}`;
+
+        //  check cache first
+        const cached = await cache.get(cacheKey);
+        if (cached) {
+            return res.json(cached);
+        }
+
+        // cache miss - query DB
         const result = await pool.query(
             `SELECT
                 e.id,
@@ -53,12 +63,12 @@ exports.getPerformance = async (req, res) => {
 
         const allEnrollments = result.rows;
 
-        // only count completed enrollments in averages
+        // only completed enrollments count in averages
         const completed = allEnrollments.filter(
             e => e.status === "completed"
         );
 
-        // per course breakdown — all enrollments
+        // per course breakdown - all enrollments
         const courses = allEnrollments.map(e => ({
             courseName:           e.course_name,
             courseCode:           e.course_code,
@@ -73,9 +83,9 @@ exports.getPerformance = async (req, res) => {
             isRetakeEligible:     e.is_retake_eligible,
         }));
 
-        // if no completed courses yet
+        // no completed courses yet
         if (completed.length === 0) {
-            return res.json({
+            const response = {
                 message:           "No completed courses yet",
                 totalEnrollments:  allEnrollments.length,
                 completedCourses:  0,
@@ -83,11 +93,17 @@ exports.getPerformance = async (req, res) => {
                 averageAttendance: null,
                 performanceStatus: null,
                 courses,
-            });
+            };
+
+            // still cache this - avoids DB hit on every refresh
+            await cache.set(cacheKey, response, 300);
+            return res.json(response);
         }
 
         // calculate averages from completed only
-        const totalMarks      = completed.reduce((sum, e) => sum + (e.marks || 0), 0);
+        const totalMarks = completed.reduce(
+            (sum, e) => sum + (e.marks || 0), 0
+        );
         const totalAttendance = completed.reduce(
             (sum, e) => sum + parseFloat(e.attendance_percentage), 0
         );
@@ -102,14 +118,19 @@ exports.getPerformance = async (req, res) => {
         else if (avgMarks >= 50) performance = "Average";
         else                     performance = "Needs Improvement";
 
-        res.json({
+        const response = {
             totalEnrollments:  allEnrollments.length,
             completedCourses:  completed.length,
             averageMarks:      parseFloat(avgMarks.toFixed(2)),
             averageAttendance: parseFloat(avgAttendance.toFixed(2)),
             performanceStatus: performance,
             courses,
-        });
+        };
+
+        // cache for 5 minutes
+        await cache.set(cacheKey, response, 300);
+
+        res.json(response);
 
     } catch (error) {
         next(error);

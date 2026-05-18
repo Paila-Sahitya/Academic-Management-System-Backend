@@ -1,4 +1,5 @@
 const pool = require("../db/index");
+const cache = require("../helpers/cache");
 
 // helper - derive cpurse status from dates
 function getCourseStatus(startDate, endDate) {
@@ -343,12 +344,14 @@ exports.markAttendance = async (req, res) => {
             [newAttended, isEligible, id]
         );
 
+        // invalidate performance cache
+        await cache.del(`performance:student:${enrollment.student_id}`);
+
         const attendancePercentage = enrollment.total_classes
             ? parseFloat(
                 ((newAttended / enrollment.total_classes) * 100).toFixed(2)
               )
             : null;
-
         res.json({
             message: present ? "Marked present" : "Marked absent",
             attendedClasses:      newAttended,
@@ -434,6 +437,9 @@ exports.updateMarks = async (req, res) => {
              RETURNING *`,
             [marks, finalStatus, isRetakeEligible, id]
         );
+
+        // invalidate this student's performance cache
+        await cache.del(`performance:student:${enrollment.student_id}`);
 
         res.json({
             message: responseMessage,

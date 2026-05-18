@@ -1,4 +1,5 @@
 const pool = require("../db/index");
+const cache = require("../helpers/cache");
 
 // submit appeal
 exports.submitAppeal = async (req, res) => {
@@ -165,6 +166,9 @@ exports.resolveAppeal = async (req, res) => {
                 id
             ]
         );
+
+        // invalidate student's performance cache
+        await cache.del(`performance:student:${appeal.student_id}`);
 
         await client.query("COMMIT");
 

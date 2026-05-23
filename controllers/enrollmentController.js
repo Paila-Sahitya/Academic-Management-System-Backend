@@ -1,5 +1,6 @@
 const pool = require("../db/index");
 const cache = require("../helpers/cache");
+const addAttendanceWarningJob = require("../jobs/attendanceWarning");
 
 // helper - derive cpurse status from dates
 function getCourseStatus(startDate, endDate) {
@@ -77,7 +78,7 @@ exports.enrollCourse = async (req, res) => {
                 });
             }
 
-            // failed / dropped / disqualified → delete old record
+            // failed / dropped / disqualified - delete old record
             // so we can create a fresh enrollment
             await client.query(
                 "DELETE FROM enrollments WHERE student_id = $1 AND course_id = $2",
@@ -87,7 +88,7 @@ exports.enrollCourse = async (req, res) => {
 
         // check capacity
         if (course.current_count < course.max_students) {
-            // seat available → enroll directly
+            // seat available - enroll directly
             const result = await client.query(
                 `INSERT INTO enrollments (student_id, course_id, status)
                  VALUES ($1, $2, 'enrolled')
@@ -111,7 +112,7 @@ exports.enrollCourse = async (req, res) => {
             });
 
         } else {
-            // course full → add to waitlist
+            // course full - add to waitlist
             const waitlistCount = await client.query(
                 `SELECT COUNT(*) FROM enrollments
                  WHERE course_id = $1 AND status = 'waitlisted'`,
@@ -346,12 +347,37 @@ exports.markAttendance = async (req, res) => {
 
         // invalidate performance cache
         await cache.del(`performance:student:${enrollment.student_id}`);
-
+        
+        //calculate percentage
         const attendancePercentage = enrollment.total_classes
             ? parseFloat(
                 ((newAttended / enrollment.total_classes) * 100).toFixed(2)
               )
             : null;
+        
+        // warn student if attendance drops below 60%
+        if (
+            attendancePercentage !== null &&
+            attendancePercentage < 60 &&
+            isEligible === false   // only warn when becoming ineligible
+        ) {
+            // fetch student details for the email
+            const studentResult = await pool.query(
+                "SELECT name, email FROM users WHERE id = $1",
+                [enrollment.student_id]
+            );
+
+            if (studentResult.rows.length > 0) {
+                const student = studentResult.rows[0];
+                await addAttendanceWarningJob({
+                    studentEmail: student.email,
+                    studentName:  student.name,
+                    courseName:   enrollment.course_name || "your course",
+                    percentage:   attendancePercentage,
+                });
+            }
+        }
+
         res.json({
             message: present ? "Marked present" : "Marked absent",
             attendedClasses:      newAttended,

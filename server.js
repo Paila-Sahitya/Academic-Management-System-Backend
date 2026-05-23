@@ -5,19 +5,29 @@ const createAdmin = require("./config/createAdmin");
 const requestLogger = require("./middleware/requestLogger");
 const errorHandler = require("./middleware/errorHandler");
 const { globalLimiter, authLimiter } = require("./middleware/rateLimiter");
+const scheduleWeeklyDigest = require("./jobs/weeklyDigest");
+
 
 dotenv.config();
 createAdmin();
 
-const app = express();
+// Start workers
+require("./workers/emailWorker");
+require("./workers/reportWorker");
 
+// Schedule cron jobs 
+scheduleWeeklyDigest();
+
+const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(requestLogger);
 
+//rate limiting
 app.use("/api/", globalLimiter);
 app.use("/api/auth/login", authLimiter);
 
+//routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/course", require("./routes/courseRoutes"));
@@ -26,7 +36,9 @@ app.use("/api/performance", require("./routes/performanceRoutes"));
 app.use("/api/appeals", require("./routes/appealRoutes"));
 //health endpoints are public
 app.use("/", require("./routes/healthRoutes"));
+app.use("/api/jobs", require("./routes/jobRoutes"));
 
+//error handler
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;

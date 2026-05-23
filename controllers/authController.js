@@ -1,6 +1,7 @@
 const pool = require("../db/index");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const addWelcomeEmailJob = require("../jobs/welcomeEmail");
 
 //register
 exports.register = async (req, res) => {
@@ -30,7 +31,22 @@ exports.register = async (req, res) => {
             [name, email, hashedPassword, role || "student"]
         );
 
-        res.status(201).json(result.rows[0]);
+        const user = result.rows[0];
+
+        // add welcome email job (non-blocking)
+        const jobId = await addWelcomeEmailJob({
+            name:  user.name,
+            email: user.email,
+        });
+
+        logger.info({
+            message: "User registered",
+            userId:  user.id,
+            email:   user.email,
+            jobId,
+        });
+
+        res.status(201).json(user);
 
     } catch (error) {
         next(error);
